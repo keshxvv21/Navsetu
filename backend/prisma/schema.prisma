@@ -1,0 +1,160 @@
+// NavSetu — Prisma Schema
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- ENUMS ----------
+
+enum ProblemStatus {
+  OPEN
+  CLOSED
+  IN_PILOT
+  CONVERTED
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  SELECTED
+  REJECTED
+}
+
+enum PilotStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CONVERTED
+}
+
+enum MilestoneStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+// ---------- MODELS ----------
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String
+  sector      String
+  contactInfo String   @map("contact_info")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  problems  Problem[]
+  adoptions Adoption[]
+
+  @@map("departments")
+}
+
+model Startup {
+  id       String  @id @default(uuid())
+  name     String
+  dpiitId  String  @unique @map("dpiit_id")
+  sector   String
+  teamSize Int     @map("team_size")
+  verified Boolean @default(false)
+
+  applications Application[]
+
+  @@map("startups")
+}
+
+model Problem {
+  id           String        @id @default(uuid())
+  departmentId String        @map("department_id")
+  title        String
+  description  String
+  budgetCap    Decimal       @map("budget_cap")
+  deadline     DateTime
+  status       ProblemStatus @default(OPEN)
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  department   Department    @relation(fields: [departmentId], references: [id])
+  applications Application[]
+
+  @@index([departmentId])
+  @@map("problems")
+}
+
+model Application {
+  id        String            @id @default(uuid())
+  problemId String            @map("problem_id")
+  startupId String            @map("startup_id")
+  pitch     String
+  status    ApplicationStatus @default(SUBMITTED)
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  problem Problem @relation(fields: [problemId], references: [id])
+  startup Startup @relation(fields: [startupId], references: [id])
+  pilot   Pilot?
+
+  @@index([problemId])
+  @@index([startupId])
+  @@map("applications")
+}
+
+model Pilot {
+  id             String      @id @default(uuid())
+  applicationId  String      @unique @map("application_id")
+  startDate      DateTime    @map("start_date")
+  endDate        DateTime    @map("end_date")
+  budget         Decimal
+  successMetrics String      @map("success_metrics")
+  status         PilotStatus @default(NOT_STARTED)
+
+  application Application @relation(fields: [applicationId], references: [id])
+  milestones  Milestone[]
+  contract    Contract?
+
+  @@map("pilots")
+}
+
+model Milestone {
+  id          String          @id @default(uuid())
+  pilotId     String          @map("pilot_id")
+  title       String
+  dueDate     DateTime        @map("due_date")
+  status      MilestoneStatus @default(NOT_STARTED)
+  evidenceUrl String?         @map("evidence_url")
+
+  pilot Pilot @relation(fields: [pilotId], references: [id])
+
+  @@index([pilotId])
+  @@map("milestones")
+}
+
+model Contract {
+  id                 String   @id @default(uuid())
+  pilotId            String   @unique @map("pilot_id")
+  convertedAt        DateTime @default(now()) @map("converted_at")
+  contractValue      Decimal  @map("contract_value")
+  justificationDocUrl String  @map("justification_doc_url")
+
+  pilot     Pilot      @relation(fields: [pilotId], references: [id])
+  adoptions Adoption[]
+
+  @@map("contracts")
+}
+
+model Adoption {
+  id                   String   @id @default(uuid())
+  contractId           String   @map("contract_id")
+  adoptingDepartmentId String   @map("adopting_department_id")
+  adoptedAt            DateTime @default(now()) @map("adopted_at")
+
+  contract           Contract   @relation(fields: [contractId], references: [id])
+  adoptingDepartment Department @relation(fields: [adoptingDepartmentId], references: [id])
+
+  @@index([contractId])
+  @@map("adoptions")
+}
